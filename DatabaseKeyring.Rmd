@@ -1,0 +1,54 @@
+---
+title: "SettingCredentials"
+author: "Eliza Harris"
+date: "1/18/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setting up keyring
+
+This document shows you how to set up a keyring to store database credentials securely. First you need to install and load the keyring package.
+
+```{r keyringinstall, eval=FALSE}
+install.packages("keyring")
+library(keyring)
+```
+
+Then you need to create a place to store the credentials on your own computer securely. You will need to do this for each new computer you use. You will be prompted to enter a password - this is your own password to access the database credentials, and not the database password.
+
+```{r keyringcreate, eval=FALSE}
+keyring_create("DBcredentials")
+```
+
+Now you need to save the database credentials in the keychain you just created. You will be prompted to enter a password, and here you should enter the database password (ask the database administrator if you don't have the password). If you are using the DatabaseAdmin package you will need to adjust the service and username accordingly, as shown below.
+
+```{r keyringset, eval=FALSE}
+key_set(service = "databaselogin",username = "c7701196", keyring ="DBcredentials")
+key_set(service = "databaseadminlogin",username = "c7701050", keyring ="DBcredentials") ## for admin
+```
+
+Each time you start a new session, you can unlock the database credentials using:
+
+```{r keyringunlock, eval=FALSE}
+keyring_unlock("DBcredentials")
+```
+
+At the end of the session you should lock the credentials again using: 
+
+```{r keyringlock, eval=FALSE}
+keyring_lock("DBcredentials")
+```
+
+This ensures someone cannot obtain the password by hacking into your system. When the "DBcredentials" keyring is unlocked, you can use the following commands to get the user and password.
+
+```{r keyringuse, eval=FALSE}
+keyring::key_list("databaselogin", keyring ="DBcredentials")[1,2] # get the username
+keyring::key_get("databaselogin", "c7701196", keyring ="DBcredentials") # get the password
+```
+
+You will not need to use these commands manually; they are built into the package.
+

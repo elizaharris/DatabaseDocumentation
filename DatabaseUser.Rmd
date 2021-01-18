@@ -1,0 +1,183 @@
+---
+title: "Database Introduction"
+author: "Eliza Harris"
+date: "10/21/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## What is the database?
+
+Previously you have downloaded your data from the institute "server", which is a file system hosted on an in-house server in the Botanik building, and used to store and share data. The server is useful for personal backups, storing completed work like theses and publications, and sharing ongoing project documents with a small number of users. However, it is very difficult to manage large datasets on the server, and version control is not implemented. 
+
+The "database" is a relational database set up on the university's server. Data is not stored in separate files that human users can open, duplicate and edit, but instead stored in a database system that users can "query" to extract the data that they need directly into analysis software like R, without needing their own local version of the data. Users do not duplicate data files on to their own computers for use, so calibration and traceability of data are much easier to manage on the database. The database can handle very large datasets, so combined datasets (eg. all Kaserstatt micromet data since 2008) can be stored as one "table", instead of in numerous files like on the server, minimising the workload for users. Data can only be edited by approved users, and the database is updated and backed up by zid, so data integrity is preserved. 
+
+*Database administrator*: Eliza Harris (Johnny Ingrisch)
+
+*Email*: eliza.harris@uibk.ac.at (johannes.ingrisch@uibk.ac.at)
+
+
+## How is the database organised?
+
+Organisation of the database is managed using a relational database management language called "PostgreSQL", where SQL stands for "Structured Query Language". This means that many rules govern the structure of the database, simplifying data organisation and access. Our group's data is organised in a "schema" called "bahngroup" which contains a number of tables, each containing a particular dataset as shown in the figure below. The core tables in the schema are called "datasets", "projects", "publications" and "sites" and these describe metadata relevant to all datasets. All project datasets are listed in the "datasets" table, and many have an associated metadataset. For example, the dataset with id_dataset of "co2_ecosys" is contained in the table "z_co2_ecosys" with associated metadata "z_co2_ecosys_metadata". As described in the "datasets" table entry, this dataset presents CO$_2$ flux measurements from the Forhot project in 2018 and is owned by Lena Mueller and Michael Bahn.
+
+![Organisation of the database schema "bahngroup"](/Users/elizaharris/Google Drive/for work/201905_DigitalInnovationProject/Database_Final/DatabaseSchema.jpg){width=60%}
+
+## Getting the required packages
+
+The first step is to load the required packages (if you haven't used these packages you'll need to first install them from CRAN).
+
+```{r echo=T, results='hide', error=FALSE, warning=FALSE, message=FALSE}
+rm(list=ls())
+library("RPostgreSQL")
+library("tidyverse")
+library("lubridate")
+library("devtools")
+library("DBI")
+```
+
+In addition you will need a package I have created to streamline interfacing R with the database. You can install directly from github using the install_github function from the devtools package.
+
+```{r, echo=FALSE, results='hide', error=FALSE, warning=FALSE, message=FALSE}
+#setwd("/Users/elizaharris/Google Drive/for work/Rpackages/")
+#devtools::install("DatabaseUser")
+```
+
+
+```{r}
+#devtools::install_github("elizaharris/DatabaseUser")
+library(DatabaseUser)
+```
+
+## Communicating with the database
+
+Before you can use the database, you need to be within the University's network - either on a University computer, at the University using a laptop connected to the internet via a cable (wifi will not work), or using wifi at campus or working outside the campus with an active VPN connection. If you haven't used VPN before, follow the set up guide: https://www.uibk.ac.at/zid/netz-komm/vpn/anyconnect/
+
+Before using the database, you will also need to set up your database credentials using the R package keyring. Follow the instructions in the manual page DatabaseKeyring.
+
+Once you are inside the University's network, you can communicate directly with the database using the "queryDatabaseUser" function from the DatabaseUser package. To use queryDatabaseUser, you need to write your queries in PostgreSQL code. The most common commands have therefore been provided as extra functions in the DatabaseUser package, presented below - these require no knowledge of PostgreSQL. The PostgreSQL commands will also be presented in this introduction, so you can copy and edit these to get your own data as needed. 
+
+As an example, let's get the "datasets" table from the database into our R workspace and look at it.  We'll use the PostgreSQL command "SELECT * FROM bahngroup.datasets". SELECT * allows us to choose all (*) or selected columns (using column names separated with ,) from the table that we specify using schema.tablename. We wrap this command in the function queryDatabaseUser and save the output as a variable called datasets. We'll then display some of the datasets table in our R console. 
+
+```{r, echo=TRUE}
+datasets = queryDatabaseUser("SELECT * FROM bahngroup.datasets")
+datasets[,3:8]
+```
+
+Looking at the datasets table is a common action, and can therefore also be completed with the function "showDatasets". You can also use "showProjects", "showSites", and "showPublications" to view the other core metadata tables.
+
+```{r, echo=TRUE}
+datasets = showDatasets()
+```
+
+## Getting data from the database
+
+Getting data from the database involves wrapping the relevant query inside queryDatabaseUser and saving the output. The first step is to identify the table from which you want to get data. You can look in the datasets table to get an overview of what data is available. You can filter your query, for example to a certain time window:
+
+```{r, echo=TRUE}
+datasets = queryDatabaseUser("SELECT * FROM bahngroup.datasets WHERE t_start > '01/01/2009 00:00'")
+```
+
+You can also filter for a particular string match, for example matching the site or the project. Your string match needs to be exact, including upper and lower cases. For example, we could filter for data from the Kaserstatt Alm and Hveragerdi sites:
+
+```{r, echo=TRUE}
+datasets = queryDatabaseUser("SELECT * FROM bahngroup.datasets WHERE site in ('KaserstattAlm','Hveragerdi')")
+```
+
+Queries can be combined:
+
+```{r, echo=TRUE}
+datasets = queryDatabaseUser("SELECT * FROM bahngroup.datasets WHERE (t_start > '01/01/2009 00:00' AND site in ('KaserstattAlm'))")
+```
+
+Once you know which dataset you want to access, you can look at what data is contained within it more closely. The table containing the data will usually be called z_(id_dataset) where (id_dataset) is listed in the datasets table. You can also list all tables in the schema using queryDatabaseUser or the function "showTables":
+
+```{r, echo=TRUE}
+tables = queryDatabaseUser("SELECT * FROM information_schema.tables WHERE table_schema ='bahngroup'")[,1:3]
+
+#OR#
+
+tables = showTables()
+```
+
+Once you know which table you would like to look at, you can list the columns using queryDatabaseUser or the function showColumns(tablename):
+
+```{r, echo=TRUE}
+columns = queryDatabaseUser("SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'z_n2och4_aut';")
+
+#OR#
+
+columns = showColumns("z_n2och4_aut")
+```
+
+The type and range (if numeric or time) of data in a particular column can also be seen using the function showRange(tablename,colnames):
+
+```{r, echo=TRUE}
+tablename = "z_n2och4_aut"
+colnames = c("datetime_n2o", "n2o_control")
+range = showRange(tablename,colnames)
+```
+
+Now that you know the table name and the names of columns, you can access the data in the table using time and string matching as needed. Many of the tables are large, so it is good practice to only download the variables and range of data you will need, or your computer may become very slow. For example, you could get time, temperature and precipitation data for 2015 to 2016 from the Kaserstatt Alm micrometeorology dataset using:
+
+```{r, echo=TRUE}
+MM_stat = queryDatabaseUser("SELECT datetime, tsurface_degc, precip_tot FROM bahngroup.z_micromet WHERE (datetime BETWEEN '01/01/2015 00:00' AND '01/01/2017 00:00' AND subsite=1)")
+plot(MM_stat$datetime,MM_stat$tsurface_degc,xlab="Date",ylab="Surface T (degC)",type="l",col="red")
+```
+
+## Creating a view
+
+A **view** designates a query or action that you use often in PostgreSQL, but don't want to type out every time. The query may involved selection of a subset of data, combination of data from several tables, or simple data manipulations procedures such as calculation of means. The query is saved as a view from the referenced table - the view does not edit the data in the referenced table, and it also doesn't duplicate it, saving space and facilitating traceability. If the data in the referenced table is updated, the data shown in the view is automatically updated, since every time you call the view the query is executed. The referenced table in a view does not need to be a primary data table, but can also be another view, which simplifies complex tasks. Examples of situations where you might want to create a view include:
+
+* Simple calibration procedures: For example, soil water content needs to be calibrated using a linear regression of gravimetric against measured weights. Applying this as a view means that the raw data is saved, and the calibration procedure can be reviewed and updated at any time.
+* Selection of data from a large table conforming to numerous filters that you regularly want to access
+* Selection and simple manipulation of data, for example showing the mean and standard deviation of various parameters for quick quality control
+
+Creating a view is simple: The desired query is preceeded by CREATE VIEW viewname as {query...}, as shown in the code below. Views can also easily be deleted with DROP VIEW. However, database users are generally not permitted to create or delete views - users only have read rights for the database. If you want to create and use views, speak to the database administrator.
+
+```{r, eval=FALSE}
+queryDatabase("CREATE VIEW my_met_data as SELECT datetime, tsurface_degc, precip_tot FROM bahngroup.z_micromet WHERE (datetime BETWEEN '01/01/2015 00:00' AND '01/01/2017 00:00' AND subsite=1)")
+
+queryDatabase("DROP VIEW IF EXISTS my_met_data")
+```
+
+Once a view exists, you can open the data in R the same way as with any other data table. 
+
+```{r, echo=TRUE}
+data = queryDatabaseUser("SELECT * FROM my_met_data;")
+```
+
+## Further details about the database organisation
+
+PostgreSQL is a relational database management system - "relational" databases maintain data integrity by relating items in one table to key items in another table. Key items are called "Primary keys" and must be unique, and these relate to "Foreign keys" in other tables. A value in a foreign key variable must be present in the corresponding primary key variable. All primary keys are contained within the four core tables, "datasets", "projects", "publications" and "sites". For example, id_project in the "projects" table is a primary key. Each listed project has a unique text id, for example the ForHot project has the id "forhot" and the REGARDS project has the project id "regards". The project id is referenced as a foreign key by the table "datasets" in the column project_id. Every text value listed in datasets:project_id must be present in the primary key projects:id_projects. This ensures that the metadata describing the project responsible for every dataset **must** be listed in the projects table.
+
+The referencing of measurement sites is handled slightly differently to other keys. Each site or subsite listed in the sites table has a unique integer id, for example, the Kaserstatt abandoned site has the subsite_id of 3 and the Hveragerdi site has a subsite id of 6. subsite_id in the sites table is designated as a primary key. Within the publications and datasets tables, there are columns for each subsite called subsiteX (X = subsite id) containing TRUE is the site is included in the dataset/publication and FALSE if not. Datasets containing data from more than one subsite will have an "subsites" foreign key column designating the subsite where each line of data was measured, for example Kaserstatt micrometeorology.
+
+## Preparing your data for the database
+
+Finalised data, or data that is shared by other group members and/or others at external institutes, should be added to the database. For example, when you finish a project or your thesis, data would be ready for upload to the database. To prepare your data:
+
+1. Check your project(s), site(s) and publication(s) are present in the database. If not, add them to the "Server_DataList.xlsx" located on the *server* in the folder oekophysiologie. If you cannot access the server, contact the database administrator to get the list.
+
+2. Prepare your data and add it to the folder "oekophysiologie/Data/ForDatabase", where all the data files are kept. The data files already in the database ("oekophysiologie/Data/InDatabase") can be used as examples to help you prepare your data correctly. Follow some basic guidelines:
+    * Data should be in .txt or .csv format, with "." and not "," used as a decimal.
+    * Only final data should be included. Don't include raw data if it can't be used by others, eg. for licor data you should have the fluxes not the .81x files. However, the data should not be processed more than necessary: no statistics, analyses, temporal averaging, gapfilling unless clearly flagged...
+    * Make sure all variable names use only alphanumeric characters as well as _ and -, with no spaces (do not use $ / \ . # * +). Do not use special German characters or any accents, and ensure all text is in English. Variable names should not start with numbers and it is good practice that they do not begin with a capital letter.
+    * Include sufficient information in your variable names, eg. not "flux" but "CO2flux_umol_m-2_s-1".
+    * Put time stamps in the format YYYY-MM-DD and datetimes in the format YYYY-MM-DD HH:MM:SS - this will ensure they are correctly processed as datetimes by PostgreSQL.
+    * Only include your *own* data - do not include group data like micrometeorology that is in the database separately anyway.
+    
+3. Prepare a metadata file as well if needed (usually it is needed) containing all the same variable columns as your data file and specifying explicitly for each column information such as units, instrument used, detection limit, NaN value, uncertainty, and any other relevant information. Look at the InDatabase folder to see some examples of metadata files.
+    * If plot, treatment or similar is one of your variables, then the metadata file is ideal to explain the treatment designations. For example your data file might have a "treatment" columns with integer values 1, 2 and 3, and your metadata file will explain that 1 was the control, 2 was a drought treatment, and 3 was a +nitrogen treatment.
+    
+4. Add your dataset to the Server_DataList with a new unique ID, following the formatting of all other entries and including all relevant information. If you are moving to a new institute, make sure to update/include your new contact details here also.
+
+5. Inform the database administrator that you have prepared a dataset for upload. If you regularly upload or update datasets, you may want to request administrator rights so you can edit your own datasets.
+
+
+---------------------------
+
+
